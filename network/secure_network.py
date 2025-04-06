@@ -1,6 +1,5 @@
-from nacl.public import PrivateKey, PublicKey, Box
+from nacl.public import PrivateKey, PublicKey, Box, SealedBox
 import base64
-
 class EncryptedChannel:
     def __init__(self, private_key=None, peer_public_key=None):
         self.private_key = private_key or PrivateKey.generate()
@@ -14,28 +13,31 @@ class EncryptedChannel:
 
     def encrypt(self, message: bytes) -> bytes:
         if not self.box:
-            raise ValueError("Encryption box not initialized.")
+            raise ValueError("Encryption box not initialized for encryption. Call set_key() first.")
         return self.box.encrypt(message)
 
     def decrypt(self, encrypted_message: bytes) -> bytes:
-        if not self.box:
-            raise ValueError("Encryption box not initialized.")
-        return self.box.decrypt(encrypted_message)
+        if self.box:
+            return self.box.decrypt(encrypted_message)
+        else:
+            # Fallback for onion layer or messages without known peer key
+            sealed_box = SealedBox(self.private_key)
+            return sealed_box.decrypt(encrypted_message)
 
 class OnionPacket:
     def __init__(self, payload: bytes, path: list[str]):
         self.payload = payload
-        self.path = path  # List of public keys as base64 strings
+        self.path = path  # list of public keys (base64-encoded)
 
-    def wrap_layers(self):
+    def wrap_layers(self) -> bytes:
         data = self.payload
         for pubkey_b64 in reversed(self.path):
             pubkey = PublicKey(base64.b64decode(pubkey_b64))
-            channel = EncryptedChannel(peer_public_key=pubkey)
-            data = channel.encrypt(data)
+            sealed_box = SealedBox(pubkey)
+            data = sealed_box.encrypt(data)
         return data
 
     @staticmethod
     def unwrap_layer(encrypted_data: bytes, private_key: PrivateKey) -> bytes:
-        channel = EncryptedChannel(private_key)
-        return channel.decrypt(encrypted_data)
+        sealed_box = SealedBox(private_key)
+        return sealed_box.decrypt(encrypted_data)
