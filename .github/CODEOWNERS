@@ -1,0 +1,19 @@
+
+# CODEOWNERS for the Ashans project
+# These users/teams must review PRs for the specified paths
+
+# Core development (blockchain, consensus, networking)
+core/        @ashans-org/ashans-dev
+network/     @ashans-org/ashans-dev
+wallet/      @ashans-org/ashans-dev
+
+# Documentation and project policies
+docs/        @ashans-org/ashans-dev
+README.md    @ashans-org/ashans-dev
+CONTRIBUTING.md @ashans-org/ashans-dev
+
+# CI/CD and workflows
+.github/     @ashans-org/ashans-dev
+
+# All Python files
+*.py         @ashans-org/ashans-dev
