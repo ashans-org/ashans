@@ -1,43 +1,39 @@
 from nacl.public import PrivateKey, PublicKey, Box, SealedBox
 import base64
 class EncryptedChannel:
-    def __init__(self, private_key=None, peer_public_key=None):
+    def __init__(self, private_key=None):
         self.private_key = private_key or PrivateKey.generate()
         self.public_key = self.private_key.public_key
-        self.peer_public_key = peer_public_key
-        self.box = Box(self.private_key, self.peer_public_key) if self.peer_public_key else None
+
+    def create_box(self, peer_public_key):
+        return Box(self.private_key, peer_public_key)
 
     def set_key(self, peer_public_key):
         self.peer_public_key = peer_public_key
         self.box = Box(self.private_key, self.peer_public_key)
 
-    def encrypt(self, message: bytes) -> bytes:
-        if not self.box:
-            raise ValueError("Encryption box not initialized for encryption. Call set_key() first.")
-        return self.box.encrypt(message)
+    def encrypt(self, peer_public_key, message: bytes) -> bytes:
+        box = Box(self.private_key, peer_public_key)
+        return box.encrypt(message)
 
-    def decrypt(self, encrypted_message: bytes) -> bytes:
-        if self.box:
-            return self.box.decrypt(encrypted_message)
-        else:
-            # Fallback for onion layer or messages without known peer key
-            sealed_box = SealedBox(self.private_key)
-            return sealed_box.decrypt(encrypted_message)
+    def decrypt(self, sender_public_key, encrypted_message: bytes) -> bytes:
+        box = Box(self.private_key, sender_public_key)
+        return box.decrypt(encrypted_message)
+
 
 class OnionPacket:
-    def __init__(self, payload: bytes, path: list[str]):
+    def __init__(self, payload: bytes, path: list):
         self.payload = payload
-        self.path = path  # list of public keys (base64-encoded)
+        self.path = path
 
-    def wrap_layers(self) -> bytes:
-        data = self.payload
-        for pubkey_b64 in reversed(self.path):
-            pubkey = PublicKey(base64.b64decode(pubkey_b64))
-            sealed_box = SealedBox(pubkey)
-            data = sealed_box.encrypt(data)
-        return data
-
+    def encrypt_layer(self, recipient_pubkey: PublicKey, sender_privkey: PrivateKey) -> bytes:
+        box = Box(sender_privkey, recipient_pubkey)
+        encrypted = box.encrypt(self.payload)
+        return sender_privkey.public_key.encode() + encrypted  # prepend sender pubkey
+    
     @staticmethod
-    def unwrap_layer(encrypted_data: bytes, private_key: PrivateKey) -> bytes:
-        sealed_box = SealedBox(private_key)
-        return sealed_box.decrypt(encrypted_data)
+    def unwrap_layer(private_key: PrivateKey, encrypted_layer: bytes) -> bytes:
+        sender_pubkey = PublicKey(encrypted_layer[:32])
+        encrypted_message = encrypted_layer[32:]
+        box = Box(private_key, sender_pubkey)
+        return box.decrypt(encrypted_message)

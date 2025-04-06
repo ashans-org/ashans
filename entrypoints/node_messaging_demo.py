@@ -10,6 +10,7 @@ def simulate_secure_communication():
     node_a_private = PrivateKey.generate()
     node_b_private = PrivateKey.generate()
 
+
     node_a_public = node_a_private.public_key
     node_b_public = node_b_private.public_key
 

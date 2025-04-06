@@ -1,37 +1,41 @@
-import argparse
-import time
 from node.node import Node
-from wallet.wallet import Wallet
+from network.secure_network import EncryptedChannel, OnionPacket
+from nacl.public import PrivateKey
 
-def simulate_node_startup():
-    print("🚀 Starting Ashans Node...")
+def create_node(node_id):
+    private_key = PrivateKey.generate()
+    channel = EncryptedChannel(private_key=private_key)
+    return Node(node_id, channel)
 
-    wallet = Wallet()
-    node = Node(node_id="node_1", wallet=wallet)
-    node.start()
 
-    print("✅ Node running with wallet address:", wallet.get_address())
-    print("🔄 Simulating basic blockchain interaction...")
+def simulate_onion_routing():
+    nodeA = create_node("NodeA")
+    nodeB = create_node("NodeB")
+    nodeC = create_node("NodeC")
 
-    time.sleep(2)
-    node.create_block(transactions=["Tx1", "Tx2"])
-    node.create_block(transactions=["Tx3"])
+    # Define reachable nodes
+    nodeA.network = {"NodeB": nodeB}
+    nodeB.network = {"NodeC": nodeC}
+    nodeC.network = {}
+    final_message = b" Secret message for NodeC"
 
-    print("📦 Current Blockchain State:")
-    for block in node.blockchain.chain:
-        print(f" - Block #{block.index} | Hash: {block.hash[:10]}...")
+    # Important: build onion from inner (NodeC) to outer (NodeB)
+    routing_path = [
+        ("NodeC", nodeC.encrypted_channel.public_key),  # Final hop
+        ("NodeB", nodeB.encrypted_channel.public_key),  # First hop
+    ]
 
-    print("🛑 Node simulation complete.")
+    payload = final_message
+    for node_id, pubkey in reversed(routing_path):
+        # Wrap each layer in HOP header and encrypt
+        layer = f"HOP:{node_id}\n".encode() + payload
+        onion = OnionPacket(layer, [])
+        payload = onion.encrypt_layer(pubkey, nodeA.encrypted_channel.private_key)
 
-def main():
-    parser = argparse.ArgumentParser(description="Ashans Full Node Simulation")
-    parser.add_argument("--simulate", action="store_true", help="Run a node simulation")
-    args = parser.parse_args()
+    print("\n🚀 Onion Routing Simulation Started\n")
+    # Send initial message to NodeB (not NodeA)
+    nodeA.send_to_node("NodeB", payload)
 
-    if args.simulate:
-        simulate_node_startup()
-    else:
-        print("ℹ️ Use --simulate to run the node simulation demo.")
 
 if __name__ == "__main__":
-    main()
+    simulate_onion_routing()
