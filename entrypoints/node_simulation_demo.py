@@ -2,40 +2,39 @@ from node.node import Node
 from network.secure_network import EncryptedChannel, OnionPacket
 from nacl.public import PrivateKey
 
-def create_node(node_id):
-    private_key = PrivateKey.generate()
-    channel = EncryptedChannel(private_key=private_key)
-    return Node(node_id, channel)
-
-
+# ✅ Define create_node
+def create_node(name):
+    node = Node(name)
+    node.channel = EncryptedChannel()  # each node has its own channel (private/public key)
+    return node
 def simulate_onion_routing():
     nodeA = create_node("NodeA")
     nodeB = create_node("NodeB")
     nodeC = create_node("NodeC")
 
-    # Define reachable nodes
+    # Each node has a network dict so it knows its neighbors
     nodeA.network = {"NodeB": nodeB}
     nodeB.network = {"NodeC": nodeC}
     nodeC.network = {}
-    final_message = b" Secret message for NodeC"
 
-    # Important: build onion from inner (NodeC) to outer (NodeB)
+    final_message = b"Secret message for NodeC"
+
+    # Build routing path from final to first (reverse order)
     routing_path = [
-        ("NodeC", nodeC.encrypted_channel.public_key),  # Final hop
-        ("NodeB", nodeB.encrypted_channel.public_key),  # First hop
+        ("NodeC", nodeC.channel.public_key),
+        ("NodeB", nodeB.channel.public_key),
     ]
 
+    # Encrypt in reverse (inner layer first)
+    sender_channel = nodeA.channel  # use consistent sender
     payload = final_message
-    for node_id, pubkey in reversed(routing_path):
-        # Wrap each layer in HOP header and encrypt
-        layer = f"HOP:{node_id}\n".encode() + payload
-        onion = OnionPacket(layer, [])
-        payload = onion.encrypt_layer(pubkey, nodeA.encrypted_channel.private_key)
 
+    for node_id, pubkey in reversed(routing_path):
+        print(f"[Debug] Wrapping layer for {node_id}")
+        layer = f"HOP:{node_id}\n".encode() + payload
+        payload = sender_channel.encrypt(pubkey, layer)  # use nodeA’s key
     print("\n🚀 Onion Routing Simulation Started\n")
-    # Send initial message to NodeB (not NodeA)
     nodeA.send_to_node("NodeB", payload)
 
-
-if __name__ == "__main__":
-    simulate_onion_routing()
+# Run the simulation
+simulate_onion_routing()

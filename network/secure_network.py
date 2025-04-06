@@ -5,35 +5,30 @@ class EncryptedChannel:
         self.private_key = private_key or PrivateKey.generate()
         self.public_key = self.private_key.public_key
 
-    def create_box(self, peer_public_key):
-        return Box(self.private_key, peer_public_key)
-
-    def set_key(self, peer_public_key):
-        self.peer_public_key = peer_public_key
-        self.box = Box(self.private_key, self.peer_public_key)
-
-    def encrypt(self, peer_public_key, message: bytes) -> bytes:
+    def encrypt(self, peer_public_key, message):
+        print(f"[Debug] Encrypting with key: {self.private_key.encode().hex()}")
         box = Box(self.private_key, peer_public_key)
-        return box.encrypt(message)
+        return self.public_key.encode() + box.encrypt(message)
 
-    def decrypt(self, sender_public_key, encrypted_message: bytes) -> bytes:
+    def decrypt(self, encrypted_message):
+        sender_public_key = PublicKey(encrypted_message[:32])
+        print(f"[Debug] Decrypting with key: {self.private_key.encode().hex()}")
+        ciphertext = encrypted_message[32:]
         box = Box(self.private_key, sender_public_key)
-        return box.decrypt(encrypted_message)
-
+        return box.decrypt(ciphertext)
 
 class OnionPacket:
-    def __init__(self, payload: bytes, path: list):
-        self.payload = payload
-        self.path = path
+    def __init__(self, data: bytes):
+        self.data = data
 
-    def encrypt_layer(self, recipient_pubkey: PublicKey, sender_privkey: PrivateKey) -> bytes:
-        box = Box(sender_privkey, recipient_pubkey)
-        encrypted = box.encrypt(self.payload)
-        return sender_privkey.public_key.encode() + encrypted  # prepend sender pubkey
-    
+    def encrypt_layer(self, public_key):
+        ephemeral_private_key = PrivateKey.generate()
+        box = Box(ephemeral_private_key, public_key)
+        return ephemeral_private_key.public_key.encode() + box.encrypt(self.data)
+
     @staticmethod
-    def unwrap_layer(private_key: PrivateKey, encrypted_layer: bytes) -> bytes:
-        sender_pubkey = PublicKey(encrypted_layer[:32])
-        encrypted_message = encrypted_layer[32:]
-        box = Box(private_key, sender_pubkey)
-        return box.decrypt(encrypted_message)
+    def unwrap_layer(encrypted_payload: bytes, private_key):
+        sender_pub_key = PublicKey(encrypted_payload[:32])
+        message = encrypted_payload[32:]
+        box = Box(private_key, sender_pub_key)
+        return box.decrypt(message)
