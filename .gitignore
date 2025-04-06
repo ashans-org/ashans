@@ -1,0 +1,10 @@
+# Ignore Python virtual environment
+venv/
+
+# Ignore pytest cache
+.pytest_cache/
+
+# Ignore Visual Studio/VS Code folder
+.vs/
+
+**/__pycache__/

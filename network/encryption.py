@@ -1,24 +1,22 @@
 from nacl.public import PrivateKey, PublicKey, Box
-from nacl.encoding import Base64Encoder
 
-class EncryptionUtils:
-    def __init__(self):
-        self.private_key = PrivateKey.generate()
+class EncryptedChannel:
+    def __init__(self, private_key=None, peer_public_key=None):
+        self.private_key = private_key or PrivateKey.generate()
         self.public_key = self.private_key.public_key
+        self.peer_public_key = peer_public_key
+        self.box = Box(self.private_key, self.peer_public_key) if self.peer_public_key else None
 
-    def encrypt(self, recipient_public_key: PublicKey, message: str) -> str:
-        box = Box(self.private_key, recipient_public_key)
-        encrypted = box.encrypt(message.encode(), encoder=Base64Encoder)
-        return encrypted.decode()
+    def set_key(self, peer_public_key):
+        self.peer_public_key = peer_public_key
+        self.box = Box(self.private_key, self.peer_public_key)
 
-    def decrypt(self, sender_public_key: PublicKey, encrypted_message: str) -> str:
-        box = Box(self.private_key, sender_public_key)
-        decrypted = box.decrypt(encrypted_message.encode(), encoder=Base64Encoder)
-        return decrypted.decode()
+    def encrypt(self, message):
+        if not self.box:
+            raise ValueError("Encryption box not initialized. Call set_key() first.")
+        return self.box.encrypt(message)
 
-    def get_public_key_bytes(self) -> bytes:
-        return self.public_key.encode(encoder=Base64Encoder)
-
-    @staticmethod
-    def load_public_key(key_bytes: bytes) -> PublicKey:
-        return PublicKey(key_bytes, encoder=Base64Encoder)
+    def decrypt(self, encrypted_message):
+        if not self.box:
+            raise ValueError("Encryption box not initialized. Call set_key() first.")
+        return self.box.decrypt(encrypted_message)
