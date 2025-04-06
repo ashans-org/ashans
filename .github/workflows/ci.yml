@@ -22,8 +22,10 @@ jobs:
     - name: 📦 Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt || true  # allow if no file
+        pip install -r requirements.txt || true
         pip install pytest
 
     - name: 🧪 Run Pytest
-      run: pytest tests/
+      run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        pytest tests/
