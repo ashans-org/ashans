@@ -1,0 +1,6 @@
+cryptography
+argon2-cffi
+networkx
+flask
+pyNaCl
+python-dotenv
