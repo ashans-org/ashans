@@ -1,40 +1,37 @@
+import argparse
+import time
 from node.node import Node
-from network.secure_network import EncryptedChannel, OnionPacket
-from nacl.public import PrivateKey
+from wallet.wallet import Wallet
 
-# ✅ Define create_node
-def create_node(name):
-    node = Node(name)
-    node.channel = EncryptedChannel()  # each node has its own channel (private/public key)
-    return node
-def simulate_onion_routing():
-    nodeA = create_node("NodeA")
-    nodeB = create_node("NodeB")
-    nodeC = create_node("NodeC")
+def simulate_node_startup():
+    print("🚀 Starting Ashans Node...")
 
-    # Each node has a network dict so it knows its neighbors
-    nodeA.network = {"NodeB": nodeB}
-    nodeB.network = {"NodeC": nodeC}
-    nodeC.network = {}
+    wallet = Wallet()
+    node = Node(node_id="node_1", wallet=wallet)
+    node.start()
 
-    final_message = b"Secret message for NodeC"
+    print("✅ Node running with wallet address:", wallet.get_address())
+    print("🔄 Simulating basic blockchain interaction...")
 
-    # Build routing path from final to first (reverse order)
-    routing_path = [
-        ("NodeC", nodeC.channel.public_key),
-        ("NodeB", nodeB.channel.public_key),
-    ]
+    time.sleep(2)
+    node.create_block(transactions=["Tx1", "Tx2"])
+    node.create_block(transactions=["Tx3"])
 
-    # Encrypt in reverse (inner layer first)
-    sender_channel = nodeA.channel  # use consistent sender
-    payload = final_message
+    print("📦 Current Blockchain State:")
+    for block in node.blockchain.chain:
+        print(f" - Block #{block.index} | Hash: {block.hash[:10]}...")
 
-    for node_id, pubkey in reversed(routing_path):
-        print(f"[Debug] Wrapping layer for {node_id}")
-        layer = f"HOP:{node_id}\n".encode() + payload
-        payload = sender_channel.encrypt(pubkey, layer)  # use nodeA’s key
-    print("\n🚀 Onion Routing Simulation Started\n")
-    nodeA.send_to_node("NodeB", payload)
+    print("🛑 Node simulation complete.")
 
-# Run the simulation
-simulate_onion_routing()
+def main():
+    parser = argparse.ArgumentParser(description="Ashans Full Node Simulation")
+    parser.add_argument("--simulate", action="store_true", help="Run a node simulation")
+    args = parser.parse_args()
+
+    if args.simulate:
+        simulate_node_startup()
+    else:
+        print("ℹ️ Use --simulate to run the node simulation demo.")
+
+if __name__ == "__main__":
+    main()
