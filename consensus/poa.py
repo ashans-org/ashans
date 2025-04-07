@@ -7,7 +7,23 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from nacl.exceptions import BadSignatureError
+from nacl.signing import VerifyKey
 
+class ProofOfAuthority:
+    def __init__(self, validators=None):
+        self.validators = validators or []
+
+    def sign(self, message, wallet):
+        return wallet.sign(message)
+
+    def verify_signature(self, message, signature, public_key_bytes):
+        try:
+            verify_key = VerifyKey(public_key_bytes)
+            verify_key.verify(message, signature)
+            return True
+        except BadSignatureError:
+            return False
 class AuthorityNode:
     def __init__(self, node_id, secret_key):
         self.node_id = node_id
