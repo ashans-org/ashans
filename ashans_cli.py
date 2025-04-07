@@ -15,7 +15,8 @@ def create_wallet():
     wallet_instance = Wallet()
     print("✅ Wallet created.")
     print("Public Key (PEM):")
-    print(wallet_instance.get_public_key_pem().decode())
+    print(wallet_instance.get_public_key_pem())
+
 
 def view_wallet():
     if not wallet_instance:
