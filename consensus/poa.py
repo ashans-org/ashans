@@ -54,6 +54,9 @@ class ProofOfAuthority:
         
         data = f"{validator_id}-{int(time.time())}"
         return hashlib.sha256(data.encode()).hexdigest()
+    def is_valid_proof(self, block, proof):
+        expected = self.get_proof(block.validator)
+        return proof == expected
 class AuthorityNode:
     def __init__(self, node_id, secret_key):
         self.node_id = node_id
