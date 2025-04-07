@@ -24,6 +24,36 @@ class ProofOfAuthority:
             return True
         except BadSignatureError:
             return False
+    
+    def is_valid_validator(self, node_id):
+        """
+        :param node_id: Node ID to validate.
+        :return: True if the node is allowed to propose blocks.
+        """
+        return node_id in self.validators
+    
+    def validate_block(self, block):
+        """
+        Validate the block by checking if the validator is authorized.
+
+        :param block: The block to validate.
+        :return: True if the block is valid, otherwise False.
+        """
+        return self.is_valid_validator(block.validator)
+    def get_proof(self, validator_id):
+        """
+        Generate a mock 'proof' of authority for the given validator.
+        This can be a signed message or hash in real PoA systems.
+        Here we simulate it using a hash of validator ID and timestamp.
+
+        :param validator_id: ID of the validator proposing the block.
+        :return: A string representing the 'proof'.
+        """
+        if not self.is_valid_validator(validator_id):
+            raise ValueError(f"Validator {validator_id} is not authorized.")
+        
+        data = f"{validator_id}-{int(time.time())}"
+        return hashlib.sha256(data.encode()).hexdigest()
 class AuthorityNode:
     def __init__(self, node_id, secret_key):
         self.node_id = node_id
@@ -63,3 +93,4 @@ class PoAValidator:
         if not node:
             return False
         return node.verify_signature(block_data, signature, node.public_key)
+
