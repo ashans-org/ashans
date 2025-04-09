@@ -1,9 +1,11 @@
-# ashans-api/app/routes/wallet.py
+﻿# ashans-api/app/routes/wallet.py
 
 from fastapi import APIRouter, Request, HTTPException
 from app.utils.jwt_utils import create_jwt_token
 from wallet.wallet import Wallet
+from core.blockchain_instance import DEFAULT_SECRET, WALLETS_DIR
 import base64
+import os
 
 router = APIRouter()
 
@@ -15,13 +17,18 @@ async def create_wallet():
         signature = wallet.sign(message)  # returns bytes
         signature_b64 = base64.b64encode(signature).decode()
 
+        # 🔐 Save encrypted validator wallet
+        os.makedirs(WALLETS_DIR, exist_ok=True)
+        filepath = os.path.join(WALLETS_DIR, f"{wallet.address}.wlt")
+        wallet.save_wallet_to_file(filepath, base64.b64decode(DEFAULT_SECRET))
+
         login_payload = {
             "address": wallet.address,
             "public_key": wallet.get_public_key_b64(),
             "message": message,
             "signature": signature_b64
         }
-        
+
         token = create_jwt_token({"address": wallet.address})
 
         return {
@@ -38,7 +45,6 @@ async def create_wallet():
 @router.post("/login")
 async def login_with_signature(request: Request):
     data = await request.json()
-    print(data)
     login_payload = data.get("login_payload")
 
     if not login_payload:

@@ -1,0 +1,12 @@
+[
+  {
+    "address": "55e8b4aabc77c5c14b51f26f0169245b8c3d345c44ac21584fa68fd80c959b42",
+    "verify_key_b64": "bLPYBLXPSc83X0XsY8e/eh7Xi8vPliTm/GHVCdILZAg=",
+    "public_key_pem": "eKPF4LeMKtvBUnbdRzO4mmy8WeKoTFpXEJfjsmgU8jU="
+  },
+  {
+    "address": "24c8b967e82677b92b916f8f31f241c8c4bf67d29d7d41c3de9add0f1bf25d88",
+    "verify_key_b64": "dOr0/NAKdhP5Rb/ENHy25a9x9VLAJ55f8pLI2LBQkhs=",
+    "public_key_pem": "u9DkXm3WuaNu/lBUbI7ZsU9RQ93gf7XNDIVFwumaoh4="
+  }
+]

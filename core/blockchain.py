@@ -1,6 +1,14 @@
-﻿import time
+﻿# Updated core/blockchain.py
+import time
 import hashlib
 import json
+import os
+from nacl.public import SealedBox
+from nacl.encoding import Base64Encoder
+from nacl.signing import SigningKey
+from nacl.secret import SecretBox
+from nacl.utils import random as nacl_random
+from utils.block_utils import sanitize_block
 
 class Block:
     def __init__(self, index, transactions, timestamp, previous_hash, nonce=0, validator=None):
@@ -9,18 +17,20 @@ class Block:
         self.timestamp = timestamp
         self.previous_hash = previous_hash
         self.nonce = nonce
-        self.validator = validator
+        self.validator = self._serialize_validator(validator)
         self.hash = self.compute_hash()
 
+    def _serialize_validator(self, validator):
+        try:
+            return validator.address if hasattr(validator, 'address') else str(validator)
+        except Exception:
+            return str(validator)
+
     def compute_hash(self):
-        block_data = {
-            "index": self.index,
-            "transactions": self.transactions,
-            "timestamp": self.timestamp,
-            "previous_hash": self.previous_hash,
-            "nonce": self.nonce,
-            "validator": self.validator,
-        }
+        block_data = sanitize_block(self)
+        # Remove the hash field before hashing (if exists)
+        if "hash" in block_data:
+            del block_data["hash"]
         return hashlib.sha256(json.dumps(block_data, sort_keys=True).encode()).hexdigest()
 
     def __str__(self):
@@ -33,8 +43,11 @@ class Block:
             "validator": self.validator,
             "hash": self.hash
         }, indent=2)
+
     def __repr__(self):
         return self.__str__()
+
+
 class Blockchain:
     difficulty = 3
 
@@ -45,9 +58,7 @@ class Blockchain:
         self.create_genesis_block()
 
     def create_genesis_block(self):
-        validator = None
-        if self.consensus and hasattr(self.consensus, "validators") and self.consensus.validators:
-            validator = self.consensus.validators[0]
+        validator = self.consensus.validators[0] if self.consensus and self.consensus.validators else "genesis"
         genesis_block = Block(
             index=0,
             transactions=[],
@@ -75,13 +86,12 @@ class Blockchain:
     def add_block(self, block, proof):
         previous_hash = self.get_last_block().hash
 
-        if not self.consensus.validate_block(block):
+        if self.consensus and not self.consensus.validate_block(block):
             raise Exception("Block rejected: invalid validator")
 
         if previous_hash != block.previous_hash:
             return False
 
-        # ✅ Use PoA-specific proof validator if defined
         if hasattr(self.consensus, "is_valid_proof"):
             if not self.consensus.is_valid_proof(block, proof):
                 return False
@@ -99,13 +109,14 @@ class Blockchain:
     def mine(self):
         if not self.unconfirmed_transactions:
             return False
+
         last_block = self.get_last_block()
         new_block = Block(
             index=last_block.index + 1,
             transactions=self.unconfirmed_transactions,
             timestamp=time.time(),
             previous_hash=last_block.hash,
-            validator=self.consensus.validators[0] if self.consensus else None
+            validator=self.consensus.validators[0] if self.consensus and self.consensus.validators else "auto"
         )
         proof = self.proof_of_work(new_block)
         added = self.add_block(new_block, proof)
@@ -122,9 +133,35 @@ class Blockchain:
                 sender = tx.get("from") or tx.get("sender")
                 recipient = tx.get("to") or tx.get("recipient")
                 amount = tx.get("amount", 0)
-
                 if recipient == address:
                     balance += amount
                 if sender == address:
                     balance -= amount
         return balance
+
+    def get_data_by_address(self, address, limit=3):
+        results = []
+        for block in reversed(self.chain):
+            for tx in block.transactions:
+                if tx.get("type") == "data" and tx.get("from") == address:
+                    results.append({
+                        "block": block.index,
+                        "payload": tx["payload"],
+                        "timestamp": block.timestamp
+                    })
+                    if len(results) >= limit:
+                        return results
+        return results
+
+# External shared interface
+
+def store_to_blockchain(address, encrypted_b64):
+    from core.blockchain_instance import blockchain_instance
+    transaction = {
+        "type": "data",
+        "from": address,
+        "to": "data_store",
+        "payload": encrypted_b64
+    }
+    blockchain_instance.add_transaction(transaction)
+    blockchain_instance.mine()
