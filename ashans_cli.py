@@ -9,6 +9,7 @@ from wallet.wallet import Wallet
 from core.blockchain import Blockchain
 from consensus.poa import ProofOfAuthority
 from node.node import Node
+from network.messaging import EncryptedMessenger
 
 wallet_instance = None
 blockchain = None
@@ -30,7 +31,7 @@ def load_wallet() -> Wallet:
         return None
     with open(PRIVATE_KEY_FILE, "rb") as f:
         private_key_bytes = f.read()
-    return Wallet.from_private_key(private_key_bytes)
+    return Wallet(private_key=private_key_bytes)
 
 def save_blockchain():
     os.makedirs("blockchain_data", exist_ok=True)
@@ -102,7 +103,6 @@ def mineBlock():
     validators = [wallet_instance.get_public_key_pem()]
     blockchain = load_blockchain(validators)
 
-    # ✅ Ensure current wallet is added to validators if missing
     if wallet_instance.get_public_key_pem() not in blockchain.consensus.validators:
         blockchain.consensus.validators.append(wallet_instance.get_public_key_pem())
 
@@ -111,7 +111,6 @@ def mineBlock():
     transactions = [{"sender": "network", "recipient": wallet_instance.get_address(), "amount": 100}]
     block, proof = node.create_block(transactions)
 
-    # ✅ Save only if block was actually added
     if block in blockchain.chain:
         save_blockchain()
         print("✅ Block mined and added to the blockchain.")
@@ -129,6 +128,42 @@ def view_blockchain():
     for block in blockchain.chain:
         print(block.__dict__)
 
+def init_node():
+    global wallet_instance
+    wallet_instance = load_wallet()
+    if not wallet_instance:
+        print("❌ Wallet required. Use 'create-wallet' first.")
+        return
+    messenger = EncryptedMessenger(wallet_instance)
+    print("✅ Node initialized for messaging.")
+
+def send_message():
+    global wallet_instance
+    wallet_instance = load_wallet()
+    if not wallet_instance:
+        print("❌ Wallet required. Use 'create-wallet' first.")
+        return
+
+    recipient_pub_key = input("🔑 Enter recipient public key PEM: ")
+    message = input("✉️  Enter your message: ")
+
+    messenger = EncryptedMessenger(wallet_instance)
+    encrypted_message = messenger.encrypt_message(recipient_pub_key, message)
+
+    print("🔒 Encrypted Message:", encrypted_message)
+
+def receive_message():
+    global wallet_instance
+    wallet_instance = load_wallet()
+    if not wallet_instance:
+        print("❌ Wallet required. Use 'create-wallet' first.")
+        return
+
+    encrypted_input = input("📩 Paste received encrypted message: ")
+    messenger = EncryptedMessenger(wallet_instance)
+    decrypted = messenger.decrypt_message(encrypted_input)
+
+    print("📬 Decrypted message:", decrypted)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ashans CLI Tool")
     subparsers = parser.add_subparsers(dest="command")
@@ -139,6 +174,9 @@ if __name__ == "__main__":
     subparsers.add_parser("view-chain", help="View blockchain state")
     subparsers.add_parser("mine-block", help="Mine Block")
     subparsers.add_parser("view-balance", help="View Balance of Wallet")
+    subparsers.add_parser("init-node", help="Initialize node for encrypted messaging")
+    subparsers.add_parser("send-message", help="Send encrypted message to another node")
+    subparsers.add_parser("receive-message", help="Receive and decrypt a message")
 
     args = parser.parse_args()
 
@@ -154,5 +192,11 @@ if __name__ == "__main__":
         mineBlock()
     elif args.command == "view-balance":
         viewBalance()
+    elif args.command == "init-node":
+        init_node()
+    elif args.command == "send-message":
+        send_message()
+    elif args.command == "receive-message":
+        receive_message()
     else:
         parser.print_help()
