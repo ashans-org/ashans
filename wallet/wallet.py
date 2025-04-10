@@ -7,9 +7,12 @@ from nacl.signing import SigningKey, VerifyKey
 from nacl.encoding import Base64Encoder
 from nacl.secret import SecretBox
 from nacl.hash import blake2b
+from nacl.encoding import Base64Encoder,RawEncoder
 
+from nacl.exceptions import BadSignatureError
 
 class Wallet:
+    
     def __init__(self, private_key=None, signing_key=None):
         # For encryption: NaCl's PrivateKey (used for encryption/decryption)
         self.private_key = PrivateKey.generate() if private_key is None else PrivateKey(private_key)
@@ -22,7 +25,24 @@ class Wallet:
         # Public key PEM and address
         self.public_key_pem = base64.b64encode(bytes(self.public_key)).decode()
         self.address = hashlib.sha256(self.verify_key.encode()).hexdigest()
+    
+    def get_floating_address(wallet_address: str) -> str:
+        timestamp = int(time.time() // 30)  # rotate every 30 seconds
+        return blake2b((wallet_address + str(timestamp)).encode(), encoder=RawEncoder).hex()
+    def encrypt_data(self, data: dict, wallet_address: str) -> str:
+        key = blake2b(
+            wallet_address if isinstance(wallet_address, bytes) else wallet_address.encode(),
+            encoder=RawEncoder
+        )[:32]
+        box = SecretBox(key)
+        encrypted = box.encrypt(json.dumps(data).encode())
+        return base64.b64encode(encrypted).decode()
 
+    def decrypt_data(self, encrypted_data: str, wallet_address: str) -> dict:
+        key = blake2b(wallet_address.encode(), encoder=RawEncoder)[:32]
+        box = SecretBox(key)
+        decrypted = box.decrypt(base64.b64decode(encrypted_data))
+        return json.loads(decrypted.decode())
     def get_private_key(self):
         # Return the raw private key bytes
         return bytes(self.private_key)
@@ -103,3 +123,16 @@ class Wallet:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, 'wb') as f:
             f.write(encrypted)
+    def verify_signature(self, signature_b64: str, message: str) -> bool:
+        try:
+            verify_key = VerifyKey(self.get_signing_public_key_bytes())
+            signature = base64.b64decode(signature_b64)
+            verify_key.verify(message.encode(), signature)
+            return True
+        except BadSignatureError:
+            return False
+        except Exception as e:
+            print(f"⚠️ Signature check failed: {e}")
+            return False
+    def get_signing_public_key_bytes(self):
+        return self.signing_key.verify_key.encode()

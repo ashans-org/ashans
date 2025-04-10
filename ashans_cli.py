@@ -8,18 +8,26 @@ import json
 import getpass
 
 from wallet.wallet import Wallet
-from core.blockchain import Blockchain
+from nacl.encoding import Base64Encoder,RawEncoder
+from core.blockchain import Blockchain,store_to_blockchain
 from consensus.poa import ProofOfAuthority
 from node.node import Node
 from network.messaging import EncryptedMessenger
 from core.blockchain_instance import DEFAULT_SECRET, WALLETS_DIR
 from utils.block_utils import sanitize_block
-from utils.auth_utils import generate_signature, generate_jwt_token 
+from utils.auth_utils import generate_signature, generate_jwt_token,generate_floating_address 
+from utils.block_cost_calculation import calculate_ashans_value
+
+from nacl.secret import SecretBox
+from nacl.hash import blake2b
 
 wallet_instance = None
 blockchain = None
 BLOCKCHAIN_FILE = "blockchain_data/chain.pkl"
 VALIDATORS_JSON = "wallets/validators.json"
+
+
+
 
 
 def save_validator_wallet(wallet: Wallet):
@@ -228,11 +236,13 @@ def receive_message():
 def generate_login_payload(wallet: Wallet, message: str = "login to wallet"):
     # Generate the login payload with the message and signature
     public_key_pem = wallet.get_public_key_pem()
+    public_key = wallet.get_verify_key()  # returns a nacl.signing.VerifyKey
+    public_key_b64 = public_key.encode(encoder=Base64Encoder).decode()
     signature = generate_signature(wallet, message)  # Assume this function is implemented
     signature_b64 = base64.b64encode(signature).decode() 
     login_payload = {
         "address": wallet.get_address(),
-        "public_key": public_key_pem,
+        "public_key": public_key_b64,
         "message": message,
         "signature": signature_b64
     }
@@ -256,30 +266,118 @@ def serialize_wallet_response(response):
 def create_wallet_json():
     global wallet_instance
     if wallet_instance is None:
-        # Create a new wallet instance
+        # Create a new wallet instance if it doesn't exist
         wallet_instance = Wallet()
+        save_validator_wallet(wallet_instance)  # Save the wallet to a .wlt file
 
-        # Save the wallet to a file with encryption
-        save_validator_wallet(wallet_instance)
-
+    # Get wallet address and public key
     wallet_address = wallet_instance.get_address()
     wallet_public_key = wallet_instance.get_public_key_pem()
+    
 
+    # Generate login payload with the necessary fields
     login_payload = generate_login_payload(wallet_instance)
 
-    # Generate JWT token for authentication
-    token = generate_jwt_token({"address": wallet_address})  # Assume you have this function implemented
+    # Generate JWT token for the wallet
+    token = generate_jwt_token({"address": wallet_address})
 
-    # Format the JSON response similar to the REST API
+    # Format the response as required for the API login
     response = {
         "address": wallet_address,
         "public_key": wallet_public_key,
         "login_payload": login_payload,
-        "token": token
+        "token": token  # JWT token generated for API login
     }
+
+    # Serialize the response (ensure all objects are serializable, e.g., base64 encoding for bytes)
     serializable_response = serialize_wallet_response(response)
-    # Print the JSON response
+
+    # Print the response in JSON format with indentation
     print(json.dumps(serializable_response, indent=4))
+
+def store_encrypted_data():
+    global wallet_instance, blockchain
+
+    if wallet_instance is None:
+        wallet_instance = select_and_unlock_wallet()
+    if wallet_instance:
+        validators = [wallet_instance.get_public_key_pem()]
+        blockchain = load_blockchain(validators)
+        if wallet_instance.get_public_key_pem() not in blockchain.consensus.validators:
+            blockchain.consensus.validators.append(wallet_instance.get_public_key_pem())
+
+        node = Node(wallet=wallet_instance, blockchain=blockchain)
+
+        data = input("📦 Enter data to store: ")
+        pub_key_pem = wallet_instance.get_public_key_pem()
+        timestamp = str(int(time.time()))
+        hashed = hashlib.sha256(pub_key_pem.encode() + timestamp.encode()).hexdigest()
+        floating_address = generate_floating_address(pub_key_pem)
+
+
+        # Encrypt the data using wallet's encryption key
+        data = {
+            "payload": data  # which is your user JSON
+        }
+        
+        encrypted_data = wallet_instance.encrypt_data(data,wallet_instance.get_address())
+        encrypted_data_hash = hashlib.sha256(encrypted_data.encode()).hexdigest()
+        # Sign the hash
+        signature = wallet_instance.sign(encrypted_data_hash)
+        # Wrap it all into a secure package
+        secure_payload = {
+            "encrypted": encrypted_data,
+            "hash": encrypted_data_hash,
+            "signature": base64.b64encode(signature).decode()
+        }
+        json_data = json.dumps(data).encode()
+
+        # 💸 Calculate cost
+        ashans_coin, size_mb = calculate_ashans_value(json_data)
+        transactions = [{"sender": "network", "recipient": wallet_instance.get_address(), "ashans_coin": ashans_coin,"data":secure_payload }]
+        block, proof = node.create_block(transactions)
+        if block in blockchain.chain:
+            save_blockchain()
+            print("✅ Block mined and added to the blockchain.")
+            print(json.dumps(sanitize_block(block), indent=2))
+        else:
+            print("❌ Block was not added. Check validator and consensus logic.")
+    else:
+        print("❌ No wallet loaded.")
+
+
+
+
+def retrieve_encrypted_data():
+    global wallet_instance
+    if wallet_instance is None:
+        wallet_instance = select_and_unlock_wallet()
+    if wallet_instance:
+        try:
+            raw = input("📥 Paste JSON with 'encrypted', 'recipient', 'hash', 'signature':\n> ")
+            payload = json.loads(raw)
+            encrypted = payload["encrypted"]
+            recipient = payload["recipient"]
+            data_hash = payload["hash"]
+            signature = payload["signature"]
+
+            # Verify hash
+            calculated_hash = hashlib.sha256(encrypted.encode()).hexdigest()
+            if calculated_hash != data_hash:
+                print("❌ Hash mismatch. Data may be corrupted or tampered.")
+                return
+
+            # Verify signature
+            if not wallet_instance.verify_signature(signature, data_hash):
+                print("❌ Signature verification failed.")
+                return
+
+            # Decrypt
+            decrypted = wallet_instance.decrypt_data(encrypted, recipient)
+            print("🔓", json.dumps(decrypted, indent=2))
+
+        except Exception as e:
+            print("❌ Decryption failed:", e)
 
 
 if __name__ == "__main__":
@@ -296,6 +394,8 @@ if __name__ == "__main__":
     subparsers.add_parser("send-message", help="Send an encrypted message")
     subparsers.add_parser("receive-message", help="Receive and decrypt a message")
     subparsers.add_parser("create-wallet-json", help="Create wallet and return JSON login response")
+    subparsers.add_parser("store-data", help="Encrypt and store data on blockchain")
+    subparsers.add_parser("retrieve-data", help="Retrieve and decrypt data from blockchain")
 
     args = parser.parse_args()
 
@@ -319,4 +419,7 @@ if __name__ == "__main__":
         receive_message()
     elif args.command == "create-wallet-json":
         create_wallet_json()
-
+    elif args.command == "store-data":
+        store_encrypted_data()
+    elif args.command == "retrieve-data":
+        retrieve_encrypted_data()

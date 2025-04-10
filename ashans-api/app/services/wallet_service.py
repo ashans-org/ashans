@@ -45,7 +45,7 @@ def verify_signature_and_issue_token(data: dict):
 
         if len(signature_bytes) != 64:
             raise HTTPException(status_code=400, detail="The signature must be exactly 64 bytes long")
-
+        print("tsting1")
         verify_key = VerifyKey(public_key_bytes)
         verify_key.verify(message.encode(), signature_bytes)
         address_dict = {"address": address}
@@ -53,4 +53,5 @@ def verify_signature_and_issue_token(data: dict):
         return {"token": token}
 
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=400, detail=f"Error verifying signature: {str(e)}")

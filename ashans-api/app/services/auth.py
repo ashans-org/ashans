@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, Header
 from jose import jwt, JWTError
-from app.settings import SECRET_KEY, ALGORITHM
+from utils.settings import SECRET_KEY, ALGORITHM
 
 
 def get_current_user(authorization: str = Header(...)):

@@ -23,14 +23,7 @@ class Node:
         from core.block import Block
 
         validator = self.wallet.get_public_key_pem()
-        reward_tx = {
-            "from": "network",
-            "to": self.wallet.get_address(),
-            "amount": 10
-        }
-
-        transactions.append(reward_tx)
-
+        
         block = Block(
             index=len(self.blockchain.chain),
             previous_hash=self.blockchain.get_last_block().hash,
