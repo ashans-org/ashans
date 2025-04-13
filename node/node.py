@@ -3,12 +3,13 @@ import time
 from network.encryption import EncryptedChannel
 from wallet.wallet import Wallet
 from consensus.poa import ProofOfAuthority
+from utils.auth_utils import generate_floating_address 
 
 class Node:
-    def __init__(self, node_id=None, wallet=None, blockchain=None):
+    def __init__(self, node_id=None, wallet=None, blockchain=None, channel=None):
         self.node_id = node_id
         self.wallet = wallet if wallet else Wallet()
-
+        self.channel = channel 
         if blockchain:
             self.blockchain = blockchain
         else:
@@ -78,3 +79,8 @@ class Node:
     def start(self):
         print(f"🔗 Node {self.node_id} is starting...")
         print(f"🧠 Wallet Public Key: {self.wallet.get_public_key_pem()}")
+
+    def update_floating_address(self):
+        pub_key = self.wallet.get_public_key_pem()
+        self.floating_address = generate_floating_address(pub_key)
+        print(f"🔄 Updated Floating Address: {self.floating_address}")

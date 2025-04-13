@@ -13,7 +13,7 @@ from core.blockchain import Blockchain,store_to_blockchain
 from consensus.poa import ProofOfAuthority
 from node.node import Node
 from network.messaging import EncryptedMessenger
-from core.blockchain_instance import DEFAULT_SECRET, WALLETS_DIR
+from core.blockchain_instance import DEFAULT_SECRET, WALLETS_DIR,load_blockchain,save_blockchain
 from utils.block_utils import sanitize_block
 from utils.auth_utils import generate_signature, generate_jwt_token,generate_floating_address 
 from utils.block_cost_calculation import calculate_ashans_value
@@ -92,22 +92,7 @@ def select_and_unlock_wallet():
         return None
 
 
-def load_blockchain(validators):
-    global blockchain
-    if blockchain is None:  # Only load if not already loaded
-        if os.path.exists(BLOCKCHAIN_FILE):
-            with open(BLOCKCHAIN_FILE, "rb") as f:
-                blockchain = pickle.load(f)
-        else:
-            blockchain = Blockchain(consensus=ProofOfAuthority(validators=validators))
-    return blockchain
 
-
-def save_blockchain():
-    os.makedirs("blockchain_data", exist_ok=True)
-    with open(BLOCKCHAIN_FILE, "wb") as f:
-        pickle.dump(blockchain, f)
-    print("📝 Blockchain saved to disk.")
 
 
 def view_wallet():

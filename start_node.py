@@ -1,4 +1,4 @@
-from core.node import Node
+from node.node import Node
 from core.blockchain import Blockchain
 from consensus.poa import ProofOfAuthority
 from network.encryption import EncryptedChannel
@@ -11,7 +11,7 @@ def main():
     # Step 1: Initialize Wallet
     wallet = Wallet()
     print("🪪 Wallet initialized with public key:")
-    print(wallet.get_public_key_pem().decode())
+    print(wallet.get_public_key_pem())
 
     # Step 2: Setup Blockchain and PoA
     poa = ProofOfAuthority(validators=[wallet.get_public_key_pem()])

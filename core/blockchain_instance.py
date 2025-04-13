@@ -1,6 +1,10 @@
 ﻿import os
 import base64
 import json
+import hashlib
+import pickle
+import getpass
+
 from nacl.secret import SecretBox
 from nacl.utils import random as random_bytes
 from wallet.wallet import Wallet
@@ -11,7 +15,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WALLETS_DIR = os.path.join(BASE_DIR, "..", "wallets") 
 VALIDATORS_JSON = "./validators.json"
 DEFAULT_SECRET = base64.b64encode(b'supersecretkey!!1234567890123456')  # 32 bytes key
-
+BLOCKCHAIN_DIR = os.path.join(BASE_DIR, "..", "blockchain_data") 
+BLOCKCHAIN_FILE = BLOCKCHAIN_DIR+"/chain.pkl"
+blockchain = None
 def load_validators(secret_key: bytes):
     validators = []
     validator_info = []
@@ -57,3 +63,19 @@ def store_to_blockchain(floating_address: str, encrypted_data: str):
 
 def get_data_from_blockchain(address: str):
     return blockchain_instance.get_data_by_address(address)
+
+def load_blockchain(validators):
+    global blockchain
+    if blockchain is None:  # Only load if not already loaded
+        if os.path.exists(BLOCKCHAIN_FILE):
+            with open(BLOCKCHAIN_FILE, "rb") as f:
+                blockchain = pickle.load(f)
+        else:
+            blockchain = Blockchain(consensus=ProofOfAuthority(validators=validators))
+    return blockchain
+
+def save_blockchain():
+    os.makedirs(BLOCKCHAIN_DIR, exist_ok=True)
+    with open(BLOCKCHAIN_FILE, "wb") as f:
+        pickle.dump(blockchain, f)
+    print("📝 Blockchain saved to disk.")
